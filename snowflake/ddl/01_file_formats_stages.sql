@@ -18,13 +18,15 @@ CREATE OR REPLACE FILE FORMAT RB_TSV
     TYPE = CSV
     FIELD_DELIMITER = '\t'
     FIELD_OPTIONALLY_ENCLOSED_BY = '"'
+    ESCAPE = '\\'                    -- source escapes embedded quotes as \" (not "")
+    ESCAPE_UNENCLOSED_FIELD = NONE
     PARSE_HEADER = TRUE
     ERROR_ON_COLUMN_COUNT_MISMATCH = FALSE
     EMPTY_FIELD_AS_NULL = TRUE
     TRIM_SPACE = TRUE
     REPLACE_INVALID_CHARACTERS = TRUE
     ENCODING = 'UTF8'
-    COMMENT = 'Case-study raw feeds (outlet / portfolio / matching)';
+    COMMENT = 'Case-study raw feeds (outlet / portfolio / matching); backslash-escaped quotes';
 
 ------------------------------------------------------------------------------
 -- Internal named stage. Directory table on so we can list what landed.

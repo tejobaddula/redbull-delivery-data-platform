@@ -146,6 +146,7 @@ def stage(
 def copy(
     market: str = typer.Option(..., help="USA | GBR | DEU"),
     feed: str | None = typer.Option(None),
+    force: bool = typer.Option(False, help="re-load files already in COPY history"),
 ) -> None:
     """COPY INTO RAW from the stage and record every file result in UTIL.LOAD_HISTORY."""
     period, feeds = _registry()
@@ -161,6 +162,8 @@ def copy(
                 .rstrip(";")
             )
             stmt = body.replace("{stage_path}", sp)
+            if force:
+                stmt += "\nFORCE = TRUE"
             console.print(f"[cyan]COPY[/] {f.target_table}  <- @{STAGE}/{sp}")
             cur = conn.cursor()
             try:
@@ -208,29 +211,69 @@ def copy(
 def run(
     market: str = typer.Option(..., help="USA | GBR | DEU"),
     feed: str | None = typer.Option(None),
+    force: bool = typer.Option(False, help="re-load files already in COPY history"),
 ) -> None:
     """stage + copy for a market."""
     stage(market=market, feed=feed)
-    copy(market=market, feed=feed)
+    copy(market=market, feed=feed, force=force)
+
+
+@app.command()
+def truncate(
+    market: str | None = typer.Option(None, help="restrict to one market"),
+    feed: str | None = typer.Option(None, help="restrict to one feed"),
+    yes: bool = typer.Option(False, "--yes", help="skip confirmation"),
+) -> None:
+    """Empty RAW tables (dev convenience before a forced re-load)."""
+    period, feeds = _registry()
+    targets = {f.target_table for f in feeds.values() if (feed is None or f.name == feed)}
+    if not yes:
+        typer.confirm(
+            f"TRUNCATE {', '.join(sorted(targets))}{f' WHERE _market={market}' if market else ''}?",
+            abort=True,
+        )
+    conn = _connect()
+    try:
+        for t in sorted(targets):
+            if market:
+                conn.cursor().execute(f"DELETE FROM {t} WHERE _market = %s", (market,))
+            else:
+                conn.cursor().execute(f"TRUNCATE TABLE {t}")
+            console.print(f"[yellow]emptied[/] {t}")
+    finally:
+        conn.close()
 
 
 @app.command()
 def reconcile(market: str = typer.Option(...)) -> None:
-    """Compare data-row counts in the local files with rows loaded into RAW."""
+    """COPY_HISTORY (Snowflake's own parse) vs rows landed in RAW -> the reject count."""
     period, feeds = _registry()
-    s = load_settings()
     conn = _connect()
-    tbl = Table("feed", "market", "file rows", "rows loaded", "delta")
+    tbl = Table("feed", "market", "files", "rows parsed", "rows in RAW", "rejected", "errors")
     try:
         for f in _selected(feeds, None, market):
-            src = s.raw_data_dir / f.name / period / market
-            if not src.is_dir():
-                continue
-            file_rows = 0
-            for p in sorted(src.glob(f.glob)):
-                with p.open("rb") as fh:
-                    file_rows += sum(1 for _ in fh) - 1  # minus header
-            loaded = (
+            # authoritative per-file load stats from Snowflake, latest load per file
+            files, parsed, errors = (
+                conn.cursor()
+                .execute(
+                    """
+                    WITH h AS (
+                        SELECT file_name, row_parsed, error_count, last_load_time,
+                               ROW_NUMBER() OVER (PARTITION BY file_name
+                                                  ORDER BY last_load_time DESC) rn
+                        FROM TABLE(INFORMATION_SCHEMA.COPY_HISTORY(
+                             TABLE_NAME => %s,
+                             START_TIME => DATEADD('day', -2, CURRENT_TIMESTAMP())))
+                        WHERE file_name ILIKE %s
+                    )
+                    SELECT COUNT(*), COALESCE(SUM(row_parsed),0), COALESCE(SUM(error_count),0)
+                    FROM h WHERE rn = 1
+                    """,
+                    (f.target_table, f"%/{market}/%"),
+                )
+                .fetchone()
+            )
+            landed = (
                 conn.cursor()
                 .execute(
                     f"SELECT COUNT(*) FROM {f.target_table} WHERE _market=%s AND _period=%s",
@@ -238,13 +281,15 @@ def reconcile(market: str = typer.Option(...)) -> None:
                 )
                 .fetchone()[0]
             )
-            delta = file_rows - loaded
+            rejected = parsed - landed
             tbl.add_row(
                 f.name,
                 market,
-                f"{file_rows:,}",
-                f"{loaded:,}",
-                f"[red]{delta:,}[/]" if delta else "[green]0[/]",
+                str(files),
+                f"{parsed:,}",
+                f"{landed:,}",
+                f"[red]{rejected:,}[/]" if rejected else "[green]0[/]",
+                f"[red]{errors:,}[/]" if errors else "[green]0[/]",
             )
         console.print(tbl)
     finally:
