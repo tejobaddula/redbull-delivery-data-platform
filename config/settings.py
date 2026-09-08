@@ -27,12 +27,13 @@ class Settings(BaseSettings):
     raw_data_dir: Path = Field(alias="RAW_DATA_DIR")
 
     def connect_kwargs(self) -> dict[str, str]:
+        # warehouse deliberately omitted here: it is set with USE WAREHOUSE after
+        # connect, so `rb-load init` works before RB_LOAD_WH exists.
         return {
             "account": self.snowflake_account,
             "user": self.snowflake_user,
             "password": self.snowflake_password,
             "role": self.snowflake_role,
-            "warehouse": self.snowflake_warehouse,
         }
 
 

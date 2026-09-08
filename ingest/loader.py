@@ -58,16 +58,19 @@ def _registry() -> tuple[str, dict[str, Feed]]:
     return period, feeds
 
 
-def _connect():  # type: ignore[no-untyped-def]
+def _connect(*, use_context: bool = True):  # type: ignore[no-untyped-def]
+    """Connect with the configured role. use_context=False for `init`, when the
+    database / warehouse it references may not exist yet."""
     import snowflake.connector
 
     s = load_settings()
     conn = snowflake.connector.connect(**s.connect_kwargs())
-    cur = conn.cursor()
-    cur.execute(f"USE DATABASE {s.snowflake_database}")
-    cur.execute("USE SCHEMA RAW")
-    cur.execute(f"USE WAREHOUSE {s.snowflake_warehouse}")
-    cur.close()
+    if use_context:
+        cur = conn.cursor()
+        cur.execute(f"USE WAREHOUSE {s.snowflake_warehouse}")
+        cur.execute(f"USE DATABASE {s.snowflake_database}")
+        cur.execute("USE SCHEMA RAW")
+        cur.close()
     return conn
 
 
@@ -102,7 +105,7 @@ def _stage_path(feed: str, period: str, market: str) -> str:
 @app.command()
 def init() -> None:
     """Run the account/setup DDL (00_account_setup, 01_file_formats_stages, 02_raw_tables)."""
-    conn = _connect()
+    conn = _connect(use_context=False)
     try:
         for name in ("00_account_setup.sql", "01_file_formats_stages.sql", "02_raw_tables.sql"):
             _exec_script(conn, DDL_DIR / name)
