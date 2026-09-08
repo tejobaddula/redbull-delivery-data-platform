@@ -1,0 +1,53 @@
+[project]
+name = "redbull-delivery-de"
+version = "0.1.0"
+description = "Red Bull online food-delivery data platform (DE case study): ingest -> Snowflake RAW -> dbt marts"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "snowflake-connector-python[secure-local-storage]>=3.12",
+    "pydantic>=2.7",
+    "pydantic-settings>=2.3",
+    "python-dotenv>=1.0",
+    "pyyaml>=6.0",
+    "rich>=13.7",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+dbt = [
+    "dbt-core>=1.8",
+    "dbt-snowflake>=1.8",
+]
+dev = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "pytest>=8.3",
+    "types-pyyaml>=6.0",
+]
+
+[project.scripts]
+rb-load = "ingest.loader:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["ingest", "config"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+warn_return_any = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

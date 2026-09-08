@@ -1,0 +1,28 @@
+# Feed registry — the single source of truth for what gets ingested.
+# Adding a market or platform = adding entries here, not code.
+#
+# Layout on disk:  <RAW_DATA_DIR>/<feed>/<period>/<market>/<feed><shard>.csv
+# Layout in stage: @RB_RAW_STAGE/<feed>/<period>/<market>/...
+# All feeds: tab-delimited, double-quoted, header row, UTF-8.
+
+period: "202403"
+markets: [USA, GBR, DEU]
+
+feeds:
+  outlet:
+    target_table: RAW.OUTLET
+    file_format: RB_TSV
+    glob: "outlet*.csv"
+    markets: [USA, GBR, DEU]
+
+  portfolio:
+    target_table: RAW.PORTFOLIO
+    file_format: RB_TSV
+    glob: "portfolio*.csv"
+    markets: [GBR, DEU]        # NOTE: no USA portfolio data was delivered
+
+  matching:
+    target_table: RAW.MATCHING
+    file_format: RB_TSV
+    glob: "matching*.csv"
+    markets: [USA, GBR, DEU]
