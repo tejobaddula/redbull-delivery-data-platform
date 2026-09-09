@@ -27,7 +27,20 @@ Legend for layer: **L0** load (file format / COPY), **L1** dbt staging, **L2** d
 | 17 | Dead columns (`business_url`, `telephone_platform`, `ghost_kitchen`, `banner_img_hash`, `banner_available` constant) | outlet, portfolio | ~0% populated / single value | kept in `RAW`, dropped from staging + marts | L1 |
 | 18 | `cuisine` is `category` + `description` concatenated | outlet | exact overlap | derive from parts, don't carry the redundant field | L1 |
 | 19 | Cryptic flag names `ed` / `ed_comp` / `sd` / `sd_coke` / `leading_id_ext_link` | matching | no data dictionary supplied | documented interpretation in `dim`/`fct` descriptions; flagged as open question for the client | L2 |
-| 20 | Per-market column coverage varies wildly | outlet | `telephone` DEU 0%, `average_cost` DEU 0% / GBR 26%, `min_order_amount`/`delivery` USA 0%, `website` DEU-only | `Flag`: per-market completeness metrics in an observability model; not imputed | L2 |
+| 20 | Per-market column coverage varies wildly | outlet | `telephone` DEU 100% null, `average_cost` DEU 100% null / GBR ~80%, `min_order_amount`/`delivery` USA 100%/57% null, `website` DEU-only | `Flag`: per-market completeness metrics in an observability model; not imputed | L2 |
+| 21 | `average_cost` (price tier) holds junk values in ~39 rows (`5`, `23`×27, `40`, `599`) | outlet | `SELECT average_cost, COUNT(*) ... GROUP BY 1` | clamp to 1–4 in `stg_outlet`, else NULL; `dbt_utils.accepted_range` test enforces | L1 |
+| 22 | `id_drink` links a brand to unrelated items (Red Bull brand on `Pizza Cacciatora`) | portfolio | brand vs `item_name` mismatch | `Flag`: candidate for GenAI normalization; `dim_product` built from modal brand per `id_drink` | L2 |
+| 23 | `portfolio` menu data covers only ~15% of outlets (172k of 1.16M) | portfolio | `COUNT(DISTINCT id_outlet)` vs `outlet` | not fixable — coverage gap; `fct_menu_item` is sparse vs `dim_outlet`; surfaced in presentation | — |
+
+## Verified NON-issues (checked, turned out clean)
+
+| Check | Result |
+|---|---|
+| Referential integrity `portfolio`/`matching` → `outlet` (on `id_ext_link` and `id_outlet`) | **0 orphans** in every direction (earlier low-overlap was a single-shard sampling artifact) |
+| `id_ext_link` / `id_beverage` uniqueness | 0 duplicates — natural keys are sound |
+| Latitude / longitude out of range, `average_rating` out of 0–5 | 0 rows |
+| Negative `item_price`, unparseable `item_price` | 0 negative, 1 unparseable (of 13.8 M), 20,160 legitimately `0.00` |
+| Market vocab consistency (`market` / `address_country` / `currency` / path) | 1:1 and consistent across all 3 markets |
 
 ## Load-time results (all markets, `202403`)
 
