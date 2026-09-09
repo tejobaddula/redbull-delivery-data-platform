@@ -1,4 +1,4 @@
-.PHONY: setup lint typecheck test init load-deu load-gbr load-usa reconcile-deu
+.PHONY: setup lint typecheck test init load-deu load-gbr load-usa reconcile verify
 
 setup:            ## create venv + install deps
 	uv sync --extra dbt --extra dev
@@ -25,5 +25,8 @@ load-gbr:
 load-usa:
 	uv run rb-load run --market USA
 
-reconcile-deu:
-	uv run rb-load reconcile --market DEU
+reconcile:        ## COPY_HISTORY vs RAW (per market: make reconcile M=DEU)
+	uv run rb-load reconcile --market $(or $(M),DEU)
+
+verify:           ## independent local-CSV parse vs RAW (per market: make verify M=GBR)
+	uv run rb-load verify --market $(or $(M),DEU)

@@ -296,6 +296,69 @@ def reconcile(market: str = typer.Option(...)) -> None:
         conn.close()
 
 
+def _count_local(path: Path, glob: str) -> tuple[int, int]:
+    """Logical record count across local shards, parsed with the same dialect Snowflake
+    uses (tab delim, "-quoted, backslash-escaped, newlines allowed inside quotes).
+    Returns (files, rows)."""
+    import csv
+
+    csv.field_size_limit(2**31 - 1)
+    files = sorted(path.glob(glob))
+    rows = 0
+    for p in files:
+        with p.open(encoding="utf-8", errors="replace", newline="") as fh:
+            reader = csv.reader(
+                fh, delimiter="\t", quotechar='"', doublequote=False, escapechar="\\"
+            )
+            next(reader, None)  # header
+            rows += sum(1 for _ in reader)
+    return len(files), rows
+
+
+@app.command()
+def verify(
+    market: str = typer.Option(..., help="USA | GBR | DEU"),
+    feed: str | None = typer.Option(None),
+) -> None:
+    """Independent completeness check: parse the local CSVs with the same dialect and
+    compare the logical row count to rows in RAW. Exits non-zero on any mismatch."""
+    period, feeds = _registry()
+    s = load_settings()
+    conn = _connect()
+    tbl = Table("feed", "market", "local files", "local rows", "rows in RAW", "match")
+    ok = True
+    try:
+        for f in _selected(feeds, feed, market):
+            src = s.raw_data_dir / f.name / period / market
+            if not src.is_dir():
+                console.print(f"[yellow]skip {f.name}/{market}: {src} missing[/]")
+                continue
+            local_files, local_rows = _count_local(src, f.glob)
+            landed = (
+                conn.cursor()
+                .execute(
+                    f"SELECT COUNT(*) FROM {f.target_table} WHERE _market=%s AND _period=%s",
+                    (market, period),
+                )
+                .fetchone()[0]
+            )
+            match = local_rows == landed
+            ok = ok and match
+            tbl.add_row(
+                f.name,
+                market,
+                str(local_files),
+                f"{local_rows:,}",
+                f"{landed:,}",
+                "[green]✓[/]" if match else f"[red]✗ {landed - local_rows:+,}[/]",
+            )
+        console.print(tbl)
+    finally:
+        conn.close()
+    if not ok:
+        raise typer.Exit(1)
+
+
 def _selected(feeds: dict[str, Feed], feed: str | None, market: str) -> list[Feed]:
     chosen = [feeds[feed]] if feed else list(feeds.values())
     return [f for f in chosen if market in f.markets]

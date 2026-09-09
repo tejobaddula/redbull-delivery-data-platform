@@ -47,6 +47,11 @@ Totals: outlet **1,979,295** · portfolio **13,807,560** · matching **1,979,295
 0 rejects after fixing issue #1 (`ESCAPE='\\'`). Regenerate with
 `uv run rb-load reconcile --market <M>`.
 
+**Independent completeness check** (`rb-load verify`): the local CSVs re-parsed in Python
+with the same dialect (tab / `"`-quoted / `\`-escaped / newlines-in-quotes) give the exact
+same logical row count as `RAW` for every feed in every market — ✓ across the board.
+This is a second opinion that does not rely on Snowflake's own `COPY_HISTORY` numbers.
+
 **Observation:** `outlet` and `matching` have identical row counts per market — `matching`
 is 1:1 with platform listings (`id_ext_link`), not collapsed to physical outlets.
 
