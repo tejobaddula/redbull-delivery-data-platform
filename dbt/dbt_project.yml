@@ -1,0 +1,31 @@
+name: redbull_delivery
+version: "0.1.0"
+config-version: 2
+
+profile: redbull_delivery
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+snapshot-paths: ["snapshots"]
+
+clean-targets: ["target", "dbt_packages"]
+
+models:
+  redbull_delivery:
+    staging:
+      +materialized: view
+      +schema: staging
+    marts:
+      +materialized: table
+      +schema: marts
+
+seeds:
+  redbull_delivery:
+    +schema: staging
+
+vars:
+  # markets present in this load; drives per-market tests
+  markets: ["USA", "GBR", "DEU"]

@@ -4,8 +4,8 @@
 !.env.example
 *.p8
 *.pem
-profiles.yml
-!dbt/profiles.yml.example
+# root-level profiles.yml only; dbt/profiles.yml (env_var() refs, no secrets) is committed
+/profiles.yml
 
 # python
 .venv/
@@ -20,6 +20,7 @@ __pycache__/
 dbt/target/
 dbt/dbt_packages/
 dbt/logs/
+dbt/.user.yml
 logs/
 
 # data — never commit the raw CSVs

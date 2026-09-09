@@ -1,0 +1,29 @@
+# No secrets here — values come from the environment (see .env / .env.example).
+# `make dbt ARGS="run"` loads .env before invoking dbt.
+redbull_delivery:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: RB_TRANSFORMER
+      warehouse: RB_TRANSFORM_WH
+      database: REDBULL_DELIVERY
+      schema: PUBLIC          # overridden per-folder to STAGING / MARTS
+      threads: 8
+      client_session_keep_alive: false
+      query_tag: dbt-redbull-delivery
+
+    ci:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      password: "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role: RB_TRANSFORMER
+      warehouse: RB_TRANSFORM_WH
+      database: REDBULL_DELIVERY
+      schema: "CI_{{ env_var('DBT_CI_RUN_ID', 'LOCAL') }}"
+      threads: 8
+      query_tag: dbt-redbull-delivery-ci

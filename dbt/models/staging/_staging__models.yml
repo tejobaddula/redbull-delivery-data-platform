@@ -1,0 +1,116 @@
+version: 2
+
+models:
+  - name: stg_outlet
+    description: Typed + cleaned outlet listings. Grain = id_ext_link.
+    data_tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "latitude between -90 and 90 or latitude is null"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "longitude between -180 and 180 or longitude is null"
+    columns:
+      - name: id_ext_link
+        data_tests: [not_null, unique]
+      - name: id_outlet
+        data_tests: [not_null]
+      - name: listing_key
+        data_tests: [not_null, unique]
+      - name: market_code
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["USA", "GBR", "DEU"]
+      - name: platform_name
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Doordash", "Ubereats", "Grubhub", "Justeat", "Deliveroo", "Lieferando"]
+      - name: avg_rating
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 5}
+      - name: price_tier
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 1, max_value: 4}
+      - name: segment_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values:
+                  - restaurant
+                  - grocery/convenience store/supermarket/liquor store
+      - name: currency_code
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["USD", "GBP", "EUR"]
+
+  - name: stg_portfolio
+    description: Typed + cleaned drink menu line items. Grain = id_beverage. GBR + DEU only.
+    data_tests:
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "line_price >= 0 or line_price is null"
+    columns:
+      - name: id_beverage
+        data_tests: [not_null, unique]
+      - name: id_ext_link
+        data_tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_outlet')
+                field: id_ext_link
+      - name: market_code
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["GBR", "DEU"]
+      - name: menu_snapshot_date
+        data_tests: [not_null]
+      - name: drink_subcategory
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Cola", "Flavored Soft Drink", "Energy", "Tonic Water", "Sparkling Water", "Still Water", "Sports"]
+              config:
+                severity: warn
+
+  - name: stg_matching
+    description: Outlet listing <-> Google Maps match + availability flags. Grain = id_ext_link.
+    data_tests:
+      # ed is a superset of serves_red_bull; sd is a superset of sd_coke
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "not (serves_red_bull and not serves_energy_drink)"
+      - dbt_utils.expression_is_true:
+          arguments:
+            expression: "not (serves_coca_cola and not serves_soft_drink)"
+    columns:
+      - name: id_ext_link
+        data_tests:
+          - not_null
+          - unique
+          - relationships:
+              arguments:
+                to: ref('stg_outlet')
+                field: id_ext_link
+      - name: id_outlet
+        data_tests: [not_null]
+      - name: match_score_name
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+      - name: match_score_address
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+      - name: market_code
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["USA", "GBR", "DEU"]

@@ -1,0 +1,67 @@
+version: 2
+
+sources:
+  - name: raw
+    database: REDBULL_DELIVERY
+    schema: RAW
+    description: >
+      1:1 landing zone. All columns VARCHAR; `_market` / `_period` / `_stg_*` / `_load_ts`
+      are lineage columns added at COPY time. Loaded by ingest/loader.py.
+    config:
+      loaded_at_field: _load_ts
+      freshness:
+        warn_after: {count: 30, period: day}
+        error_after: {count: 60, period: day}
+
+    tables:
+      - name: outlet
+        description: One platform listing of an outlet (grain = id_ext_link).
+        columns:
+          - name: id_ext_link
+            description: Listing PK (one outlet on one platform).
+            data_tests: [not_null, unique]
+          - name: id_outlet
+            description: Physical outlet; repeats across platforms.
+            data_tests: [not_null]
+          - name: _market
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ["USA", "GBR", "DEU"]
+
+      - name: portfolio
+        description: One drink menu line item (grain = id_beverage). GBR + DEU only.
+        columns:
+          - name: id_beverage
+            data_tests: [not_null, unique]
+          - name: id_ext_link
+            description: FK -> outlet.id_ext_link (0 orphans verified).
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('raw', 'outlet')
+                    field: id_ext_link
+          - name: _market
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ["GBR", "DEU"]
+
+      - name: matching
+        description: One outlet listing <-> Google Maps match + availability flags (grain = id_ext_link).
+        columns:
+          - name: id_ext_link
+            data_tests: [not_null, unique]
+          - name: id_outlet
+            data_tests:
+              - not_null
+              - relationships:
+                  arguments:
+                    to: source('raw', 'outlet')
+                    field: id_outlet
+          - name: _market
+            data_tests:
+              - accepted_values:
+                  arguments:
+                    values: ["USA", "GBR", "DEU"]
