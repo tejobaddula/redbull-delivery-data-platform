@@ -1,0 +1,88 @@
+# Gold evaluation set for the Cortex Analyst PoC.
+# Each item: a natural-language question + a reference SQL whose result the
+# Analyst-generated SQL must match (compared as an unordered set of rows).
+# reference SQL runs against MARTS directly, as ACCOUNTADMIN (no RBAC filter).
+
+- id: total_outlets
+  q: How many outlets are there in total?
+  ref: SELECT COUNT(*) FROM MARTS.DIM_OUTLET
+
+- id: outlets_by_market
+  q: How many outlets are in each market?
+  ref: SELECT market_code, COUNT(*) FROM MARTS.DIM_OUTLET GROUP BY 1
+
+- id: red_bull_by_market
+  q: How many outlets carry Red Bull in each market?
+  ref: SELECT market_code, COUNT(*) FROM MARTS.DIM_OUTLET WHERE serves_red_bull GROUP BY 1
+
+- id: red_bull_penetration
+  q: What percent of outlets carry Red Bull in each market?
+  ref: >
+    SELECT market_code,
+           ROUND(100.0 * COUNT_IF(serves_red_bull) / COUNT(*), 1)
+    FROM MARTS.DIM_OUTLET GROUP BY 1
+
+- id: opportunity_by_market
+  q: How many outlets carry a competitor energy drink but not Red Bull, by market?
+  ref: SELECT market_code, COUNT(*) FROM MARTS.DIM_OUTLET WHERE is_red_bull_opportunity GROUP BY 1
+
+- id: opportunity_total
+  q: How many Red Bull opportunity outlets are there in total?
+  ref: SELECT COUNT(*) FROM MARTS.DIM_OUTLET WHERE is_red_bull_opportunity
+
+- id: top_chains_no_red_bull
+  q: Which 5 chains have the most outlets that do not carry Red Bull?
+  ref: >
+    SELECT chain_name, COUNT(*) n
+    FROM MARTS.DIM_OUTLET
+    WHERE is_chain AND NOT serves_red_bull AND chain_name IS NOT NULL
+    GROUP BY 1 ORDER BY n DESC LIMIT 5
+
+- id: energy_brands_gbr
+  q: What are the top 10 energy drink brands by number of menu lines in GBR?
+  ref: >
+    SELECT p.brand, COUNT(*) n
+    FROM MARTS.FCT_MENU_ITEM f JOIN MARTS.DIM_PRODUCT p USING (product_key)
+    WHERE f.market_code = 'GBR' AND p.drink_subcategory = 'Energy'
+    GROUP BY 1 ORDER BY n DESC LIMIT 10
+
+- id: outlets_serving_red_bull_deu
+  q: How many German outlets serve Red Bull?
+  ref: SELECT COUNT(*) FROM MARTS.DIM_OUTLET WHERE market_code = 'DEU' AND serves_red_bull
+
+- id: red_bull_editions_outlets
+  q: How many outlet listings carry Red Bull Editions?
+  ref: SELECT COUNT(*) FROM MARTS.FCT_OUTLET_AVAILABILITY WHERE has_red_bull_editions
+
+- id: chains_multi_market
+  q: How many chains operate in more than one market?
+  ref: SELECT COUNT(*) FROM MARTS.DIM_CHAIN WHERE market_count > 1
+
+- id: avg_red_bull_price_gbr
+  q: What is the average menu-line price for Red Bull products in GBR?
+  ref: >
+    SELECT ROUND(AVG(line_price), 2)
+    FROM MARTS.FCT_MENU_ITEM
+    WHERE market_code = 'GBR' AND is_red_bull
+
+- id: grocery_vs_restaurant_red_bull
+  q: What share of grocery outlets versus restaurants carry Red Bull?
+  ref: >
+    SELECT segment_type, ROUND(100.0 * COUNT_IF(serves_red_bull) / COUNT(*), 1)
+    FROM MARTS.DIM_OUTLET GROUP BY 1
+
+- id: outlets_with_conflict
+  q: How many outlets have platform listings that disagree about whether they carry Red Bull?
+  ref: SELECT COUNT(*) FROM MARTS.DIM_OUTLET WHERE has_red_bull_conflict
+
+- id: doordash_red_bull
+  q: How many DoorDash outlet listings carry Red Bull?
+  ref: >
+    SELECT COUNT(*)
+    FROM MARTS.FCT_OUTLET_AVAILABILITY a JOIN MARTS.DIM_PLATFORM p USING (platform_key)
+    WHERE p.platform_name = 'Doordash' AND a.serves_red_bull
+
+# --- ambiguous: should trigger a clarification / non-CLEAR_SQL category ---
+- id: ambiguous_best_market
+  q: Which market is doing best?
+  expect_clarification: true

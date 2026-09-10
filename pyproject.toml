@@ -12,6 +12,7 @@ dependencies = [
     "pyyaml>=6.0",
     "rich>=13.7",
     "typer>=0.12",
+    "requests>=2.34.2",
 ]
 
 [project.optional-dependencies]
@@ -28,6 +29,7 @@ dev = [
 
 [project.scripts]
 rb-load = "ingest.loader:app"
+rb-ask = "genai.ask:app"
 
 [build-system]
 requires = ["hatchling"]

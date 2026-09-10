@@ -120,6 +120,17 @@ def init() -> None:
 
 
 @app.command()
+def apply(path: str = typer.Argument(..., help="path to a .sql file to execute")) -> None:
+    """Run an arbitrary DDL file (e.g. snowflake/ddl/04_semantic_view.sql, post-dbt)."""
+    conn = _connect(use_context=False)
+    try:
+        _exec_script(conn, REPO_ROOT / path)
+        console.print("[green]applied.[/]")
+    finally:
+        conn.close()
+
+
+@app.command()
 def stage(
     market: str = typer.Option(..., help="USA | GBR | DEU"),
     feed: str | None = typer.Option(None, help="restrict to one feed"),

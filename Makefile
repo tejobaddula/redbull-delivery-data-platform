@@ -1,4 +1,5 @@
-.PHONY: setup lint typecheck test init load-deu load-gbr load-usa reconcile verify dbt dbt-deps dbt-build
+.PHONY: setup lint typecheck test init load-deu load-gbr load-usa reconcile verify \
+        dbt dbt-deps dbt-build rbac-demo semantic-view genai-eval ask
 
 # load .env, then run dbt from the dbt/ dir with the local profiles.yml
 DBT = set -a; . ./.env; set +a; cd dbt && DBT_PROFILES_DIR=. uv run dbt
@@ -11,7 +12,7 @@ lint:
 	uv run ruff format --check .
 
 typecheck:
-	uv run mypy ingest config rbac
+	uv run mypy ingest config rbac genai
 
 test:
 	uv run pytest -q
@@ -45,3 +46,12 @@ dbt-build:        ## seeds + models + tests
 
 rbac-demo:        ## prove market analysts see only their market
 	uv run python rbac/verify_rbac.py
+
+semantic-view:    ## (re)create the Cortex Analyst semantic view (needs MARTS built)
+	uv run rb-load apply snowflake/ddl/04_semantic_view.sql
+
+genai-eval:       ## score the GenAI PoC against the gold question set
+	uv run python genai/evaluate.py
+
+ask:              ## ask a question: make ask Q="how many GBR outlets carry Monster but not Red Bull"
+	uv run rb-ask "$(Q)"

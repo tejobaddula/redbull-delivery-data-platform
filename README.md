@@ -1,13 +1,16 @@
 # Red Bull Online Food-Delivery — Data Platform (DE Case Study)
 
 Raw delivery-platform CSVs (USA / GBR / DEU, Q1 2024) → Snowflake `RAW` → dbt `STAGING`
-(cleaning) → dimensional `MARTS`, with RBAC, tests, CI/CD, and a GenAI PoC.
+(cleaning) → `INTERMEDIATE` (reconciliation) → dimensional `MARTS`, with market-scoped
+RBAC, ~130 tests, and a natural-language analytics layer on Cortex Analyst.
 
 ```
-local CSV shards ──PUT──▶ @RB_RAW_STAGE ──COPY INTO──▶ RAW.*  ──dbt──▶ STAGING.stg_*  ──dbt──▶ MARTS.dim_* / fct_*
-                                          (load by column name,                              (row access policy:
-                                           file lineage columns,                              market analysts see
-                                           rejects tolerated)                                 one market, HQ sees all)
+local CSV shards ─PUT─▶ @RB_RAW_STAGE ─COPY INTO─▶ RAW.*  ─dbt─▶ STAGING ─dbt─▶ INTERMEDIATE ─dbt─▶ MARTS
+                                       (load by column name,                                       │
+                                        lineage columns,                    ┌── RAP_MARKET row policy
+                                        rejects tolerated)                  │    (analyst -> own market)
+                                                                           └── RB_DELIVERY_SV
+                                                                                └── Cortex Analyst -> "rb-ask"
 ```
 
 Transport is the only swappable part: the `COPY` bodies in `ingest/copy_templates/` are
@@ -16,18 +19,19 @@ reused verbatim by Snowpipe when moving from local `PUT` to an S3 external stage
 ## Quickstart
 
 ```bash
-# 1. tooling
-make setup                        # uv venv + deps
+make setup                         # uv venv + deps
 
-# 2. credentials  (never committed)
-cp .env.example .env              # then edit .env: account, user, password, RAW_DATA_DIR
+cp .env.example .env               # then edit: SNOWFLAKE_* + RAW_DATA_DIR  (never committed)
 
-# 3. Snowflake objects
-make init                         # warehouses, DB, schemas, roles, stage, RAW tables
+make init                          # warehouses, DB, schemas, 6 roles, RBAC policy, RAW tables
+make load-deu load-gbr load-usa    # PUT + COPY each market;  make verify M=GBR to reconcile
 
-# 4. load a market end to end  (start with DEU — smallest, has all 3 feeds)
-make load-deu
-make reconcile-deu                # file row counts vs rows loaded
+make dbt-deps dbt-build            # STAGING + INTERMEDIATE + MARTS + ~130 tests
+make semantic-view                 # Cortex Analyst semantic view (needs MARTS)
+
+make rbac-demo                     # prove market analysts see only their market
+make ask Q="how many GBR outlets carry Monster but not Red Bull"
+make genai-eval                    # score the NL->SQL layer on the gold set
 ```
 
 ## Layout
@@ -35,15 +39,23 @@ make reconcile-deu                # file row counts vs rows loaded
 | Path | What |
 |---|---|
 | `ingest/feeds.yml` | feed registry — add a market/platform here, not in code |
-| `ingest/loader.py` | `rb-load` CLI: `init` / `stage` / `copy` / `run` / `reconcile` |
+| `ingest/loader.py` | `rb-load` CLI: `init` / `stage` / `copy` / `run` / `reconcile` / `verify` / `apply` |
 | `ingest/copy_templates/` | per-feed `COPY` bodies (also the future `CREATE PIPE` bodies) |
-| `snowflake/ddl/` | `00` account setup · `01` file format + stage · `02` RAW tables · `03` row access policies |
-| `dbt/` | staging + marts models, tests, docs |
+| `snowflake/ddl/` | `00` account · `01` file format + stage · `02` RAW · `03` row access policy · `04` semantic view |
+| `dbt/` | staging / intermediate / marts models, ~130 tests, `generate_schema_name` + cleaning macros |
+| `rbac/` | `verify_rbac.sql` (live demo) · `verify_rbac.py` (`make rbac-demo`, exits non-zero on leak) |
+| `genai/` | `rb-ask` CLI, Cortex Analyst client, gold set + `evaluate.py` — see `genai/README.md` |
 | `docs/` | data dictionary · data-quality register · modeling decisions · system design |
-| `genai/` | GenAI proof-of-concept |
+
+## Model
+
+`MARTS`: `dim_market` / `dim_platform` / `dim_date` / `dim_chain` / `dim_product` (331) /
+`dim_outlet` (1.16 M) · `fct_outlet_availability` & `fct_outlet_metric` (1.98 M, listing grain) ·
+`fct_menu_item` (13.8 M, menu-line grain).
 
 ## Data notes
 
 - Feeds: `outlet` (all markets), `portfolio` (**GBR + DEU only**), `matching` (all markets).
 - Each feed is one logical table sharded into ~100 MB chunks; shards do not overlap.
 - Raw data is **not** in this repo — `RAW_DATA_DIR` in `.env` points at the local copy.
+- Load is provably complete: `rb-load verify` re-parses the local CSVs and matches `RAW` exactly.
