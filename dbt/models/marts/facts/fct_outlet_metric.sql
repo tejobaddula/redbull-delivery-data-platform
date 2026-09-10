@@ -16,6 +16,7 @@ select
     d.outlet_key,
     pf.platform_key,
     mk.market_key,
+    o.market_code,          -- denormalized: row access policy filter column
     o.scraped_date,
 
     o.num_ratings,

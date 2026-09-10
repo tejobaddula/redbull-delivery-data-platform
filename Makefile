@@ -11,7 +11,7 @@ lint:
 	uv run ruff format --check .
 
 typecheck:
-	uv run mypy ingest config
+	uv run mypy ingest config rbac
 
 test:
 	uv run pytest -q
@@ -42,3 +42,6 @@ dbt:              ## arbitrary dbt command: make dbt ARGS="run --select staging"
 
 dbt-build:        ## seeds + models + tests
 	$(DBT) build
+
+rbac-demo:        ## prove market analysts see only their market
+	uv run python rbac/verify_rbac.py

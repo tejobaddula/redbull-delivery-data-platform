@@ -24,6 +24,15 @@ models:
     marts:
       +materialized: table
       +schema: marts
+      # re-assert market-scoped row-level security after each rebuild
+      # (only models that carry a market_code column)
+      core:
+        dim_market:
+          +post-hook: "{{ apply_market_row_access_policy(this) }}"
+        dim_outlet:
+          +post-hook: "{{ apply_market_row_access_policy(this) }}"
+      facts:
+        +post-hook: "{{ apply_market_row_access_policy(this) }}"
 
 seeds:
   redbull_delivery:

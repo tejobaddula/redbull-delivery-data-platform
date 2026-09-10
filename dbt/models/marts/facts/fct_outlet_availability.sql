@@ -21,6 +21,7 @@ select
     pf.platform_key,
     mk.market_key,
     ch.chain_key,
+    m.market_code,          -- denormalized: row access policy filter column
     l.scraped_date,
 
     m.google_place_id,

@@ -22,6 +22,7 @@ select
     pr.product_key,
     pf.platform_key,
     mk.market_key,
+    p.market_code,          -- denormalized: row access policy filter column
     p.menu_snapshot_date,
 
     p.menu_section,

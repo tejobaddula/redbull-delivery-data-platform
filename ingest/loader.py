@@ -104,10 +104,15 @@ def _stage_path(feed: str, period: str, market: str) -> str:
 # --------------------------------------------------------------------------- #
 @app.command()
 def init() -> None:
-    """Run the account/setup DDL (00_account_setup, 01_file_formats_stages, 02_raw_tables)."""
+    """Run the account/setup DDL (00 account, 01 formats/stages, 02 raw tables, 03 RBAC)."""
     conn = _connect(use_context=False)
     try:
-        for name in ("00_account_setup.sql", "01_file_formats_stages.sql", "02_raw_tables.sql"):
+        for name in (
+            "00_account_setup.sql",
+            "01_file_formats_stages.sql",
+            "02_raw_tables.sql",
+            "03_row_access_policies.sql",
+        ):
             _exec_script(conn, DDL_DIR / name)
         console.print("[green]DDL applied.[/]")
     finally:
