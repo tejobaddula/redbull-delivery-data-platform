@@ -1,0 +1,148 @@
+version: 2
+
+models:
+  # ---------------- dimensions ----------------
+  - name: dim_market
+    description: Market / country / currency. Grain = market_code.
+    columns:
+      - name: market_key
+        data_tests: [not_null, unique]
+      - name: market_code
+        data_tests: [not_null, unique]
+
+  - name: dim_platform
+    description: Delivery platform. Grain = id_platform (6 rows).
+    columns:
+      - name: platform_key
+        data_tests: [not_null, unique]
+      - name: platform_name
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["Doordash", "Ubereats", "Grubhub", "Justeat", "Deliveroo", "Lieferando"]
+
+  - name: dim_date
+    description: Calendar, 2024. Grain = date_day.
+    columns:
+      - name: date_day
+        data_tests: [not_null, unique]
+
+  - name: dim_chain
+    description: Restaurant chain (global). Grain = chain_name.
+    columns:
+      - name: chain_key
+        data_tests: [not_null, unique]
+      - name: chain_name
+        data_tests: [not_null, unique]
+
+  - name: dim_product
+    description: Canonical drink. Grain = id_drink (331 rows).
+    columns:
+      - name: product_key
+        data_tests: [not_null, unique]
+      - name: id_drink
+        data_tests: [not_null, unique]
+      - name: drink_subcategory
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Cola", "Flavored Soft Drink", "Energy", "Tonic Water", "Sparkling Water", "Still Water", "Sports"]
+              config: {severity: warn}
+
+  - name: dim_outlet
+    description: Physical outlet with availability rolled up from its listings. Grain = id_outlet.
+    columns:
+      - name: outlet_key
+        data_tests: [not_null, unique]
+      - name: id_outlet
+        data_tests: [not_null, unique]
+      - name: market_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_market'), field: market_key}
+      - name: chain_key
+        data_tests:
+          - relationships:
+              arguments: {to: ref('dim_chain'), field: chain_key}
+      - name: latitude
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: -90, max_value: 90}
+
+  # ---------------- facts ----------------
+  - name: fct_outlet_availability
+    description: Red Bull / competitor availability per outlet listing. Grain = id_ext_link. All markets.
+    columns:
+      - name: availability_key
+        data_tests: [not_null, unique]
+      - name: id_ext_link
+        data_tests: [not_null, unique]
+      - name: outlet_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_outlet'), field: outlet_key}
+      - name: platform_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_platform'), field: platform_key}
+      - name: market_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_market'), field: market_key}
+      - name: match_score_name
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+
+  - name: fct_outlet_metric
+    description: Platform-reported ratings / price tier / delivery economics per listing. Grain = id_ext_link.
+    columns:
+      - name: outlet_metric_key
+        data_tests: [not_null, unique]
+      - name: id_ext_link
+        data_tests: [not_null, unique]
+      - name: outlet_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_outlet'), field: outlet_key}
+      - name: avg_rating
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 0, max_value: 5}
+      - name: price_tier
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 1, max_value: 4}
+
+  - name: fct_menu_item
+    description: One drink menu line. Grain = id_beverage. GBR + DEU only.
+    columns:
+      - name: menu_item_key
+        data_tests: [not_null, unique]
+      - name: id_beverage
+        data_tests: [not_null, unique]
+      - name: outlet_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_outlet'), field: outlet_key}
+      - name: product_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_product'), field: product_key}
+      - name: market_key
+        data_tests:
+          - not_null
+          - relationships:
+              arguments: {to: ref('dim_market'), field: market_key}
+      - name: line_price
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments: {expression: ">= 0 or line_price is null"}

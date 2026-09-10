@@ -18,6 +18,9 @@ models:
     staging:
       +materialized: view
       +schema: staging
+    intermediate:
+      +materialized: table          # 2 models, each with >1 consumer + heavy aggregation
+      +schema: intermediate
     marts:
       +materialized: table
       +schema: marts
@@ -29,3 +32,4 @@ seeds:
 vars:
   # markets present in this load; drives per-market tests
   markets: ["USA", "GBR", "DEU"]
+  "dbt_date:time_zone": "UTC"

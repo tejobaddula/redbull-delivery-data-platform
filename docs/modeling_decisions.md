@@ -25,23 +25,50 @@ Run against the full load (1.98 M outlet / 13.8 M portfolio / 1.98 M matching):
 | `item_drink_category_1` ≈ constant `Soft Drink`; `_2` is the useful split | model on `drink_subcategory`; keep `_1` documented but unused |
 | `portfolio.created_at` 100 % empty; `outlet`/`matching` span 2024-01-29 → 2024-03-15 | `menu_snapshot_date` = `coalesce(created_at, load-period first-of-month)` |
 
-## Dimensional model (target — Phase 4)
+## Dimensional model (built — Phase 4)
 
-| Model | Grain | Source | Notes |
-|---|---|---|---|
-| `dim_market` | market | seed | ISO codes, currency |
-| `dim_platform` | delivery platform | stg_outlet | 6 platforms |
-| `dim_outlet` | physical outlet (`id_outlet`) | stg_outlet | dedup across platform listings; keep first-seen attributes + list of platforms |
-| `dim_product` | canonical drink (`id_drink`) | stg_portfolio | derived — no source dimension supplied; brand / manufacturer / subcategory / modal volume |
-| `dim_chain` | chain (`chain_name`) | stg_matching | only where `is_chain` |
-| `dim_date` | day | dbt_date | 2024 Q1+ |
-| `fct_menu_item` | menu line (`id_beverage`) | stg_portfolio | measures: `line_price`, `volume_ml`; GBR + DEU only |
-| `fct_outlet_availability` | outlet listing (`id_ext_link`) | stg_matching | the Red Bull / competitor flags + match scores |
-| `fct_outlet_metric` | outlet listing (`id_ext_link`) | stg_outlet | ratings, price tier, fees, min order |
+`STAGING` (3 views) → `INTERMEDIATE` (2 tables) → `MARTS` (6 dims + 3 facts, tables).
 
-Grain choice for `dim_outlet`: **physical outlet (`id_outlet`)**, not listing. Same restaurant
-on DoorDash + Uber Eats is one row; platform lands on the facts. Rationale: business questions
-("how many outlets carry Red Bull in Bavaria?") are about places, not listings.
+| Model | Grain | Rows | Source |
+|---|---|--:|---|
+| `int_outlet__unified` | physical outlet | 1,157,233 | stg_outlet + stg_matching |
+| `int_product__canonical` | drink (`id_drink`) | 331 | stg_portfolio |
+| `dim_market` | market | 3 | seed |
+| `dim_platform` | platform (`id_platform`) | 6 | stg_outlet |
+| `dim_date` | day | 365 | dbt_date (2024) |
+| `dim_chain` | chain (`chain_name`) | 140 | stg_matching |
+| `dim_product` | drink (`id_drink`) | 331 | int_product__canonical |
+| `dim_outlet` | physical outlet (`id_outlet`) | 1,157,233 | int_outlet__unified + availability roll-up |
+| `fct_outlet_availability` | listing (`id_ext_link`) | 1,979,295 | stg_matching |
+| `fct_outlet_metric` | listing (`id_ext_link`) | 1,979,295 | stg_outlet |
+| `fct_menu_item` | menu line (`id_beverage`) | 13,807,560 | stg_portfolio |
+
+**115 dbt tests pass** (unique/not_null surrogate keys, FK `relationships` facts→dims, ranges).
+
+### Grain decisions
+
+- **`dim_outlet` = physical outlet (`id_outlet`)**, not listing. "Tacos Vip on DoorDash + Uber
+  Eats" is one row; platform lands on the facts. Business questions are about places.
+- **`fct_*` stay at listing grain (`id_ext_link`)** — full per-platform detail preserved; the
+  dim is the rolled-up view.
+- **`dim_product` = `id_drink`** — brand/subcategory are 100% consistent per `id_drink`, so it's
+  a clean key. But `id_drink` is a product *family* (248/331 have multiple pack sizes), so
+  `volume_ml` lives on `fct_menu_item`; the dim only carries `modal_volume_ml` (typical size).
+
+### Availability roll-up (`dim_outlet`)
+
+28,118 outlets have platform listings that **disagree** on `serves_red_bull`. Rather than pick
+one silently:
+- `serves_red_bull` = `BOOLOR_AGG` — true if Red Bull is on **any** platform's menu (a
+  distribution question: if it's orderable anywhere, it's available)
+- `serves_red_bull_primary` = the value on the primary listing (`is_primary_listing`)
+- `has_red_bull_conflict` = the listings disagree (so an analyst can filter these out)
+
+### Reconciliation (`int_outlet__unified`)
+
+~30–36% of outlets have name/category/postal drift across listings. Rules: `MODE` for
+categoricals, longest string for `address_full`, primary listing for geo, `*_conflict` flags
+surfaced all the way to `dim_outlet`.
 
 ## Deferred (documented, not built)
 

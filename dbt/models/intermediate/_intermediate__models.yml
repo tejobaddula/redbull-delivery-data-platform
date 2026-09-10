@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: int_outlet__unified
+    description: One row per physical outlet (id_outlet); platform listings reconciled.
+    columns:
+      - name: outlet_key
+        data_tests: [not_null, unique]
+      - name: id_outlet
+        data_tests: [not_null, unique]
+      - name: market_code
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["USA", "GBR", "DEU"]
+      - name: listing_count
+        data_tests:
+          - dbt_utils.accepted_range:
+              arguments: {min_value: 1}
+
+  - name: int_product__canonical
+    description: One row per drink (id_drink) - the catalogue that wasn't supplied.
+    columns:
+      - name: product_key
+        data_tests: [not_null, unique]
+      - name: id_drink
+        data_tests: [not_null, unique]
+      - name: brand
+        data_tests: [not_null]
+      - name: is_competitor_energy
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: "= (is_energy_drink and not is_red_bull)"
