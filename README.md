@@ -45,7 +45,8 @@ make genai-eval                    # score the NL->SQL layer on the gold set
 | `dbt/` | staging / intermediate / marts models, ~130 tests, `generate_schema_name` + cleaning macros |
 | `rbac/` | `verify_rbac.sql` (live demo) · `verify_rbac.py` (`make rbac-demo`, exits non-zero on leak) |
 | `genai/` | `rb-ask` CLI, Cortex Analyst client, gold set + `evaluate.py` — see `genai/README.md` |
-| `docs/` | data dictionary · data-quality register · modeling decisions · system design |
+| `docs/` | data dictionary · data-quality register · modeling decisions · CI/CD design · system design |
+| `.github/workflows/ci.yml` | ruff + mypy + pytest on every push/PR (no secrets needed) — see `docs/cicd_design.md` for the Snowflake-connected half |
 
 ## Model
 
